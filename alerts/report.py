@@ -19,6 +19,11 @@ LINES = {
     "boosting_text": ("boosting + Telegram posts", ORANGE, "-"),
 }
 PANELS = {"all": "All forecasts", "quiet_now": "No alert at forecast time"}
+TEXT_HORIZONS = [1]
+
+
+def chosen(h):
+    return "boosting_text" if h in TEXT_HORIZONS else "boosting"
 
 plt.rcParams.update({
     "font.family": "sans-serif",
@@ -68,32 +73,44 @@ def skill_chart(table, on):
     plt.close(fig)
 
 
-def calibration_chart(predictions, method, on):
+def calibration_chart(predictions, on):
     horizons = [1, 3, 24]
-    fig, axes = plt.subplots(1, len(horizons), figsize=(10, 3.6), sharey=True)
+    fig, axes = plt.subplots(1, len(horizons), figsize=(10, 4.2), sharey=True)
     bins = np.linspace(0, 1, 11)
     for ax, h in zip(axes, horizons):
+        method = chosen(h)
         part = predictions[predictions.horizon == h]
         grouped = part.groupby(pd.cut(part[method], bins, include_lowest=True), observed=True)
         stats = grouped.agg(predicted=(method, "mean"), observed=("y", "mean"), n=("y", "size"))
         stats = stats[stats.n >= 30]
         ax.plot([0, 1], [0, 1], color=AXIS, linewidth=1)
         ax.plot(stats.predicted, stats.observed, color=BLUE, linewidth=2, marker="o", markersize=5)
-        ax.set_title(f"{h} h ahead", loc="left", fontsize=11, color=INK)
+        ax.set_title(f"{h} h ahead, {LINES[method][0]}", loc="left", fontsize=10, color=INK)
         ax.set_xlabel("forecast probability")
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
         ax.set_aspect("equal")
         clean(ax)
     axes[0].set_ylabel("share of hours with an alert")
-    fig.suptitle(f"Calibration of {LINES[method][0]} (on the diagonal = honest probabilities)", x=0.01, ha="left", fontsize=12)
+    fig.suptitle("Calibration (on the diagonal = honest probabilities)", x=0.01, ha="left", fontsize=12)
     fig.tight_layout()
-    fig.savefig(REPORTS / f"calibration_{on}.png", dpi=160)
+    fig.savefig(REPORTS / f"calibration_{on}.png", dpi=160, bbox_inches="tight")
     plt.close(fig)
 
 
 def markdown(table, predictions):
-    lines = []
+    horizons = sorted(table.horizon.unique())
+    header = ["| " + " | ".join(["forecasts"] + [f"{h} h" for h in horizons]) + " |", "|---|" + "---|" * len(horizons)]
+    lines = ["**Chosen model** (Telegram posts at 1 h, alert history only after), Brier skill vs climatology, 95% interval", ""] + header
+    for subset, title in PANELS.items():
+        rows = table[table.subset == subset].set_index(["horizon", "method"])
+        cells = [rows.loc[(h, chosen(h))] for h in horizons]
+        lines.append(f"| {title} | " + " | ".join(f"{c.brier_skill:.3f} ({c.skill_low:.3f} to {c.skill_high:.3f})" for c in cells) + " |")
+    lines += ["", "**Chosen model**, AUC inside each region (0.5 = coin flip)", ""] + header
+    for subset, title in PANELS.items():
+        rows = table[table.subset == subset].set_index(["horizon", "method"])
+        lines.append(f"| {title} | " + " | ".join(f"{rows.loc[(h, chosen(h))].roc_auc_within_region:.3f}" for h in horizons) + " |")
+    lines.append("")
     for subset, title in PANELS.items():
         part = table[table.subset == subset]
         skill = part.pivot(index="method", columns="horizon", values="brier_skill").reindex(LINES).dropna(how="all")
@@ -121,7 +138,7 @@ def main(on="val"):
     table = pd.read_csv(REPORTS / f"metrics_{on}.csv")
     predictions = pd.read_csv(REPORTS / f"predictions_{on}.csv.gz", parse_dates=["origin"])
     skill_chart(table, on)
-    calibration_chart(predictions, "boosting_text" if "boosting_text" in predictions else "boosting", on)
+    calibration_chart(predictions, on)
     text = markdown(table, predictions)
     (REPORTS / f"results_{on}.md").write_text(text, encoding="utf-8")
     print(text)
