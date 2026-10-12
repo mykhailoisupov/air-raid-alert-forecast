@@ -6,12 +6,13 @@ from alerts.features import HORIZONS, build, feature_names, hours_since, split
 
 HOURS = 24 * 60
 CUT = 24 * 45
+CUTS = [24 * 40, 24 * 45 + 7, 24 * 50 + 13]
 
 
 def random_panel(seed):
     rng = np.random.default_rng(seed)
     hours = pd.date_range("2026-01-01", periods=HOURS, freq="h", tz="UTC")
-    minutes = rng.integers(0, 61, size=(HOURS, 4)) * (rng.random((HOURS, 4)) < 0.3)
+    minutes = rng.integers(1, 61, size=(HOURS, 4)) * (rng.random((HOURS, 4)) < 0.3)
     on_end = (minutes > 0) & (rng.random((HOURS, 4)) < 0.5)
     regions = ["A", "B", "C", "D"]
     return {
@@ -20,21 +21,37 @@ def random_panel(seed):
     }
 
 
-def with_different_future(panel, other):
-    return {k: pd.concat([panel[k].iloc[:CUT], other[k].iloc[CUT:]]) for k in panel}
+def with_opposite_future(panel, cut):
+    minutes, on_end = panel["minutes"].copy(), panel["on_end"].copy()
+    minutes.iloc[cut:] = np.where(minutes.iloc[cut:] > 0, 0, 60)
+    on_end.iloc[cut:] = 1 - on_end.iloc[cut:]
+    return {"minutes": minutes, "on_end": on_end}
 
 
+@pytest.mark.parametrize("cut", CUTS)
 @pytest.mark.parametrize("h", HORIZONS)
-def test_features_do_not_depend_on_the_future(h):
+def test_features_do_not_depend_on_the_future(h, cut):
     panel = random_panel(0)
-    changed = with_different_future(panel, random_panel(1))
-    cut_time = panel["minutes"].index[CUT]
+    changed = with_opposite_future(panel, cut)
+    cut_time = panel["minutes"].index[cut]
     a = build(panel, h, labeled_only=False)
     b = build(changed, h, labeled_only=False)
     a, b = a[a.origin <= cut_time], b[b.origin <= cut_time]
     assert len(a) > 1000
     cols = ["origin"] + feature_names(a)
     pd.testing.assert_frame_equal(a[cols], b[cols])
+
+
+@pytest.mark.parametrize("h", HORIZONS)
+def test_every_feature_reacts_to_the_hour_before_the_forecast(h):
+    panel = random_panel(0)
+    changed = with_opposite_future(panel, CUT - 1)
+    cut_time = panel["minutes"].index[CUT]
+    a = build(panel, h, labeled_only=False)
+    b = build(changed, h, labeled_only=False)
+    a, b = a[a.origin == cut_time], b[b.origin == cut_time]
+    for col in ["on_now", "alert_now", "minutes_now", "national_now", "now_A", "share_3h"]:
+        assert not a[col].equals(b[col]), col
 
 
 @pytest.mark.parametrize("h", HORIZONS)
