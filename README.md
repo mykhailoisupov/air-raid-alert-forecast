@@ -12,7 +12,7 @@ The forecast time is the end of the last finished hour. Everything the model see
 
 ## Result in short
 
-Scored once on the last 28 days (2026-09-13 to 2026-10-11), 16,128 forecasts per horizon.
+Scored once on the last 28 days (2026-09-13 to 2026-10-11): 16,128 forecasts at 1 hour, falling to 15,576 at 24 hours, because the forecast hour must also lie inside the window.
 
 - **One hour ahead works.** Brier skill 0.267 against climatology. Inside a region the model ranks hours with AUC 0.76.
 - **New alerts are much harder.** When no alert is on at forecast time (88% of forecasts), skill is 0.065.
