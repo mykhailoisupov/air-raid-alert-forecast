@@ -4,6 +4,8 @@ import pandas as pd
 HORIZONS = [1, 3, 6, 12, 24]
 WINDOWS = [3, 6, 12, 24, 72, 168]
 TEXT_WINDOWS = [1, 3, 6]
+TOPIC_WINDOWS = [1, 3]
+WEEK = 168
 CAP = 168
 LOCAL_TZ = "Europe/Kyiv"
 META = ["origin", "y"]
@@ -46,12 +48,19 @@ def build(panel, h, spatial=True, labeled_only=True):
         for region in on_end.columns:
             by_time[f"now_{region}"] = on_end[region]
     if "tg_posts" in panel:
+        posts = panel["tg_posts"]
+        usual = posts.rolling(WEEK).mean()
         for w in TEXT_WINDOWS:
-            by_time[f"tg_posts_{w}h"] = panel["tg_posts"].rolling(w).sum()
+            by_time[f"tg_posts_{w}h"] = posts.rolling(w).sum()
+            by_time[f"tg_activity_{w}h"] = by_time[f"tg_posts_{w}h"] / (usual * w).clip(lower=1)
             wide[f"tg_mentions_{w}h"] = panel["tg_mentions"].rolling(w).sum()
             wide[f"tg_heading_{w}h"] = panel["tg_heading"].rolling(w).sum()
-        posts_3h = by_time["tg_posts_3h"].clip(lower=1)
-        wide["tg_mention_share_3h"] = wide["tg_mentions_3h"].div(posts_3h, axis=0)
+            wide[f"tg_mention_share_{w}h"] = wide[f"tg_mentions_{w}h"].div(by_time[f"tg_posts_{w}h"].clip(lower=1), axis=0)
+        wide["tg_mentions_late"] = panel["tg_mentions_late"]
+        wide["tg_heading_late"] = panel["tg_heading_late"]
+        for key in [k for k in panel if k.startswith("tg_topic_")]:
+            for w in TOPIC_WINDOWS:
+                by_time[f"{key}_{w}h"] = panel[key].rolling(w).sum()
 
     hours, regions = alert.index, list(alert.columns)
     origin = pd.Series(np.repeat(hours + pd.Timedelta(hours=1), len(regions)))

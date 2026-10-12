@@ -9,7 +9,8 @@ CUT = 24 * 45
 CUTS = [24 * 40, 24 * 45 + 7, 24 * 50 + 13]
 REACTIVE = [
     "on_now", "alert_now", "minutes_now", "national_now", "now_A", "share_3h",
-    "tg_posts_1h", "tg_mentions_1h", "tg_heading_1h", "tg_mentions_3h", "tg_mention_share_3h",
+    "tg_posts_1h", "tg_mentions_1h", "tg_heading_1h", "tg_mentions_3h",
+    "tg_mentions_late", "tg_heading_late", "tg_topic_x_1h", "tg_topic_x_3h",
 ]
 
 
@@ -25,6 +26,9 @@ def random_panel(seed):
         "tg_posts": pd.Series(rng.integers(0, 20, size=HOURS).astype(float), index=hours),
         "tg_mentions": pd.DataFrame(rng.integers(0, 5, size=(HOURS, 4)).astype(float), index=hours, columns=regions),
         "tg_heading": pd.DataFrame(rng.integers(0, 3, size=(HOURS, 4)).astype(float), index=hours, columns=regions),
+        "tg_mentions_late": pd.DataFrame(rng.integers(0, 3, size=(HOURS, 4)).astype(float), index=hours, columns=regions),
+        "tg_heading_late": pd.DataFrame(rng.integers(0, 2, size=(HOURS, 4)).astype(float), index=hours, columns=regions),
+        "tg_topic_x": pd.Series(rng.integers(0, 3, size=HOURS).astype(float), index=hours),
     }
 
 
@@ -33,7 +37,7 @@ def with_opposite_future(panel, cut):
     minutes.iloc[cut:] = np.where(minutes.iloc[cut:] > 0, 0, 60)
     on_end.iloc[cut:] = 1 - on_end.iloc[cut:]
     changed = {"minutes": minutes, "on_end": on_end}
-    for key in ["tg_posts", "tg_mentions", "tg_heading"]:
+    for key in [k for k in panel if k.startswith("tg_")]:
         changed[key] = panel[key].copy()
         changed[key].iloc[cut:] += 1
     return changed
