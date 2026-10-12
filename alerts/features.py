@@ -3,6 +3,7 @@ import pandas as pd
 
 HORIZONS = [1, 3, 6, 12, 24]
 WINDOWS = [3, 6, 12, 24, 72, 168]
+TEXT_WINDOWS = [1, 3, 6]
 CAP = 168
 LOCAL_TZ = "Europe/Kyiv"
 META = ["origin", "y"]
@@ -44,6 +45,13 @@ def build(panel, h, spatial=True, labeled_only=True):
     if spatial:
         for region in on_end.columns:
             by_time[f"now_{region}"] = on_end[region]
+    if "tg_posts" in panel:
+        for w in TEXT_WINDOWS:
+            by_time[f"tg_posts_{w}h"] = panel["tg_posts"].rolling(w).sum()
+            wide[f"tg_mentions_{w}h"] = panel["tg_mentions"].rolling(w).sum()
+            wide[f"tg_heading_{w}h"] = panel["tg_heading"].rolling(w).sum()
+        posts_3h = by_time["tg_posts_3h"].clip(lower=1)
+        wide["tg_mention_share_3h"] = wide["tg_mentions_3h"].div(posts_3h, axis=0)
 
     hours, regions = alert.index, list(alert.columns)
     origin = pd.Series(np.repeat(hours + pd.Timedelta(hours=1), len(regions)))
@@ -60,8 +68,8 @@ def build(panel, h, spatial=True, labeled_only=True):
         cols[name] = np.repeat(series.to_numpy(dtype=float), len(regions))
     cols["y"] = alert.shift(-h).to_numpy().ravel()
     out = pd.DataFrame(cols)
-    features = [c for c in out.columns if c not in META]
-    out = out.dropna(subset=features + ["y"] if labeled_only else features)
+    required = [c for c in out.columns if c not in META and not c.startswith("tg_")]
+    out = out.dropna(subset=required + ["y"] if labeled_only else required)
     return out.reset_index(drop=True)
 
 

@@ -1,3 +1,5 @@
+from functools import partial
+
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier
@@ -32,8 +34,8 @@ def logistic(fit, target):
     return model.predict_proba(target[SIMPLE])[:, 1]
 
 
-def boosting(fit, target):
-    features = feature_names(fit)
+def boosting(fit, target, text=False):
+    features = [f for f in feature_names(fit) if text or not f.startswith("tg_")]
     model = HistGradientBoostingClassifier(
         learning_rate=0.05,
         max_iter=300,
@@ -53,4 +55,5 @@ METHODS = {
     "persistence": persistence,
     "logistic": logistic,
     "boosting": boosting,
+    "boosting_text": partial(boosting, text=True),
 }
