@@ -44,6 +44,38 @@ The exact versions are recorded in `data/raw/source.json` and `data/raw/kpszsu_s
 | `tests/` | 47 tests. The important ones check that no feature can see the future. |
 | `reports/` | Metrics, tables and charts from the runs described here. |
 
+## Model
+
+One gradient boosting classifier per horizon, shared by all regions: `HistGradientBoostingClassifier` from scikit-learn.
+
+| Setting | Value |
+|---|---|
+| Target | 1 if the forecast hour has at least one minute of alert, else 0 |
+| Loss | log loss |
+| Trees | 300, learning rate 0.05, up to 31 leaves, at least 50 rows per leaf |
+| Other | L2 penalty 1.0, no early stopping, seed 0 |
+| Training rows | 357,504 at 1 hour for the test run (2025-01-01 to the start of the window) |
+| Inputs | 48 from alert history, 10 more from Telegram posts |
+
+The settings were chosen once before the first run and never tuned.
+
+Inputs, all computed at the forecast time:
+
+- **Region now.** Alert on at the end of the last hour, alert during it, minutes under alert, and the two hours before.
+- **Region history.** Share of alert hours over the last 3, 6, 12, 24, 72 and 168 hours, hours since the last alert and since the last quiet hour, alert starts in the last 24 hours.
+- **Time pattern.** Clock hour and weekday of the forecast hour in Kyiv time, whether that clock hour had an alert a day and a week earlier, and its alert rate over the last 7 and 28 days.
+- **Country.** The current state of each of the 24 regions, and the national share now, one hour ago and over 6 hours.
+- **Telegram.** Posts on the channel, posts naming the region and posts saying something is heading to it, each over the last 1, 3 and 6 hours, plus the share of posts naming the region over 3 hours.
+- **Region** itself, as a category.
+
+Baselines:
+
+- **Climatology.** The region's alert rate at the forecast clock hour over the last 28 days.
+- **Persistence.** The alert rate in the forecast hour given whether an alert is on now, per region, from the last 90 days.
+- **Logistic regression.** Four inputs (alert on now, alert during the last hour, 28-day climatology, alert share over 24 hours), fitted on the last 90 days.
+
+Metrics: Brier score, Brier skill (1 minus the method's Brier score over climatology's), log loss, PR AUC, and ROC AUC both pooled and averaged over regions. Intervals come from 2,000 bootstrap draws of whole days.
+
 ## How leakage is prevented
 
 1. **Features use finished hours only.** A forecast made at 14:00 uses alerts and posts up to 13:59:59.
