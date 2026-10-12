@@ -36,3 +36,17 @@
 |---|---|---|---|---|---|
 | All forecasts | 0.025 (0.015 to 0.033) | 0.002 (-0.001 to 0.005) | -0.004 (-0.011 to 0.002) | -0.012 (-0.017 to -0.007) | 0.003 (-0.002 to 0.008) |
 | No alert at forecast time | 0.025 (0.016 to 0.034) | 0.003 (-0.002 to 0.007) | -0.003 (-0.010 to 0.004) | -0.011 (-0.016 to -0.006) | 0.002 (-0.003 to 0.006) |
+
+**Gain from Telegram posts at 1 h by week of the window**
+
+| week 1 | week 2 | week 3 | week 4 |
+|---|---|---|---|
+| 0.021 | 0.029 | 0.030 | 0.017 |
+
+**Channel drift**
+
+| period | posts per day | posts naming a known region |
+|---|---|---|
+| fit | 101 | 88% |
+| validation | 180 | 90% |
+| test | 255 | 79% |

@@ -1,3 +1,4 @@
+import json
 import sys
 
 import matplotlib
@@ -9,6 +10,8 @@ import pandas as pd
 
 from alerts.evaluate import skill_interval
 from alerts.run import REPORTS
+from alerts.telegram import POSTS, load_posts
+from alerts.text import REGIONS
 
 SURFACE, INK, SECONDARY, MUTED, GRID, AXIS = "#fcfcfb", "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
 BLUE, ORANGE = "#2a78d6", "#eb6834"
@@ -134,12 +137,47 @@ def markdown(table, predictions):
     return "\n".join(lines)
 
 
+def gain(part):
+    return 1 - ((part.boosting_text - part.y) ** 2).sum() / ((part.boosting - part.y) ** 2).sum()
+
+
+def weekly_gain(predictions):
+    part = predictions[predictions.horizon == 1]
+    week = (part.origin - part.origin.min()).dt.days // 7 + 1
+    gains = part.groupby(week).apply(gain, include_groups=False)
+    lines = ["**Gain from Telegram posts at 1 h by week of the window**", "", "| " + " | ".join(f"week {w}" for w in gains.index) + " |"]
+    lines += ["|" + "---|" * len(gains), "| " + " | ".join(f"{v:.3f}" for v in gains) + " |", ""]
+    return "\n".join(lines)
+
+
+def channel_drift():
+    posts = load_posts()
+    matched = posts.text.str.contains("|".join(REGIONS.values()))
+    val, test = (json.loads((REPORTS / f"run_{on}.json").read_text()) for on in ["val", "test"])
+    periods = {
+        "fit": (posts.posted_at.min(), val["forecasts_from"]),
+        "validation": (val["forecasts_from"], val["forecasts_until"]),
+        "test": (test["forecasts_from"], test["forecasts_until"]),
+    }
+    lines = ["**Channel drift**", "", "| period | posts per day | posts naming a known region |", "|---|---|---|"]
+    for name, (start, stop) in periods.items():
+        start, stop = pd.Timestamp(start), pd.Timestamp(stop)
+        inside = (posts.posted_at >= start) & (posts.posted_at < stop)
+        days = (stop - start) / pd.Timedelta(days=1)
+        lines.append(f"| {name} | {inside.sum() / days:.0f} | {matched[inside].mean():.0%} |")
+    return "\n".join(lines + [""])
+
+
 def main(on="val"):
     table = pd.read_csv(REPORTS / f"metrics_{on}.csv")
     predictions = pd.read_csv(REPORTS / f"predictions_{on}.csv.gz", parse_dates=["origin"])
     skill_chart(table, on)
     calibration_chart(predictions, on)
     text = markdown(table, predictions)
+    if "boosting_text" in predictions:
+        text += "\n" + weekly_gain(predictions)
+    if POSTS.exists() and (REPORTS / "run_test.json").exists():
+        text += "\n" + channel_drift()
     (REPORTS / f"results_{on}.md").write_text(text, encoding="utf-8")
     print(text)
 
