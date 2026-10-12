@@ -78,16 +78,15 @@ def test_target_is_the_alert_h_hours_after_the_last_observed_hour(h):
 
 
 @pytest.mark.parametrize("h", HORIZONS)
-def test_split_keeps_training_labels_before_later_forecasts(h):
+def test_split_keeps_fit_labels_before_the_first_forecast(h):
     panel = random_panel(0)
     df = build(panel, h)
     hours = panel["minutes"].index
-    val_start, test_start = hours[24 * 40], hours[24 * 50]
-    train, val, test = split(df, h, val_start, test_start)
-    known = lambda part: part.origin + pd.Timedelta(hours=h)
-    assert min(len(train), len(val), len(test)) > 0
-    assert known(train).max() <= val_start <= val.origin.min()
-    assert known(val).max() <= test_start <= test.origin.min()
+    start, stop = hours[24 * 40], hours[24 * 50]
+    fit, target = split(df, h, start, stop)
+    assert min(len(fit), len(target)) > 0
+    assert (fit.origin + pd.Timedelta(hours=h)).max() <= start <= target.origin.min()
+    assert (target.origin + pd.Timedelta(hours=h)).max() <= stop
 
 
 def test_hours_since():

@@ -69,9 +69,8 @@ def feature_names(df):
     return [c for c in df.columns if c not in META]
 
 
-def split(df, h, val_start, test_start):
+def split(df, h, start, stop):
     known = df.origin + pd.Timedelta(hours=h)
-    train = df[known <= val_start]
-    val = df[(df.origin >= val_start) & (known <= test_start)]
-    test = df[df.origin >= test_start]
-    return train, val, test
+    fit = df[known <= start]
+    target = df[(df.origin >= start) & (known <= stop)]
+    return fit, target

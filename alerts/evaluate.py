@@ -1,0 +1,25 @@
+import numpy as np
+from sklearn.metrics import average_precision_score, brier_score_loss, log_loss, roc_auc_score
+
+EPS = 0.001
+
+
+def within_region_auc(y, p, region):
+    aucs = []
+    for r in np.unique(region):
+        m = region == r
+        if 0 < y[m].mean() < 1:
+            aucs.append(roc_auc_score(y[m], p[m]))
+    return float(np.mean(aucs))
+
+
+def scores(y, p, region):
+    y, region = np.asarray(y), np.asarray(region.astype(str))
+    p = np.clip(np.asarray(p, dtype=float), EPS, 1 - EPS)
+    return {
+        "brier": brier_score_loss(y, p),
+        "log_loss": log_loss(y, p),
+        "pr_auc": average_precision_score(y, p),
+        "roc_auc": roc_auc_score(y, p),
+        "roc_auc_within_region": within_region_auc(y, p, region),
+    }

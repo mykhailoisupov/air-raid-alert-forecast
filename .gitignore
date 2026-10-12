@@ -2,3 +2,4 @@
 __pycache__/
 .pytest_cache/
 data/raw/*.csv
+reports/predictions_*.csv.gz
