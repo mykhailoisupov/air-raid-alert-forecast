@@ -13,6 +13,10 @@ TRAIN_START = "2025-01-01"
 TEST_DAYS = 28
 VAL_DAYS = 28
 REPORTS = Path("reports")
+SUBSETS = {
+    "all": lambda df: df.y >= 0,
+    "quiet_now": lambda df: df.on_now == 0,
+}
 
 
 def windows(panel, on):
@@ -29,14 +33,17 @@ def evaluate(panel, on="val", train_start=TRAIN_START, methods=METHODS, spatial=
         data = build(panel, h, spatial=spatial)
         data = data[data.origin >= pd.Timestamp(train_start, tz="UTC")]
         fit, target = split(data, h, start, stop)
-        out = target[["origin", "region", "y"]].assign(horizon=h)
+        out = target[["origin", "region", "on_now", "y"]].assign(horizon=h)
         for name, method in methods.items():
             out[name] = method(fit, target)
-            rows.append({"horizon": h, "method": name, **scores(target.y, out[name], target.region)})
         predictions.append(out)
+        for subset, mask in SUBSETS.items():
+            part = out[mask(out)]
+            for name in methods:
+                rows.append({"horizon": h, "subset": subset, "method": name, **scores(part.y, part[name], part.region)})
     table = pd.DataFrame(rows)
-    reference = table[table.method == "climatology"].set_index("horizon").brier
-    table["brier_skill"] = 1 - table.brier / table.horizon.map(reference)
+    reference = table[table.method == "climatology"].set_index(["horizon", "subset"]).brier
+    table["brier_skill"] = 1 - table.brier / pd.MultiIndex.from_frame(table[["horizon", "subset"]]).map(reference)
     info = {
         "evaluated_on": on,
         "fit_from": train_start,
@@ -44,6 +51,7 @@ def evaluate(panel, on="val", train_start=TRAIN_START, methods=METHODS, spatial=
         "forecasts_until": str(stop),
         "rows_per_horizon": int(len(predictions[0])),
         "alert_rate": float(predictions[0].y.mean()),
+        "quiet_now_share": float((predictions[0].on_now == 0).mean()),
     }
     return table, pd.concat(predictions), info
 
